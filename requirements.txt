@@ -1,0 +1,13 @@
+yfinance==1.3.0
+pandas==3.0.2
+pymongo==4.17.0
+scikit-learn==1.8.0
+matplotlib==3.10.9
+dnspython==2.8.0
+numpy==2.4.4
+fastapi
+uvicorn
+pandas
+pymongo
+scikit-learn
+certifi

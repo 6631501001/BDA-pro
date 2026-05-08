@@ -1,12 +1,20 @@
-import yfinance as yf
-import pandas as pd
-from pymongo import MongoClient
+import sys
+try:
+    import yfinance as yf
+    import pandas as pd
+    from pymongo import MongoClient
+except ImportError as e:
+    missing = getattr(e, 'name', str(e))
+    print(f"Missing dependency: {missing}")
+    print("Activate the project virtual environment or install dependencies with:")
+    print("  python -m pip install -r requirements.txt")
+    sys.exit(1)
 
 # MongoDB Connection String
 uri = "mongodb+srv://6631501001_db_user:hUxalPBLLxkxLqSB@cluster0.34btd8c.mongodb.net/?appName=Cluster0"
 
 # 1. Connect to Database
-client = MongoClient(uri)
+client = MongoClient(uri, tls=True)
 
 # Define Database and Collection names
 db = client["BDA_Project"]

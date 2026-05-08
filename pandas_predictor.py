@@ -1,8 +1,15 @@
-from pymongo import MongoClient
+import sys
+try:
+    from pymongo import MongoClient
+except ImportError as e:
+    missing = getattr(e, 'name', str(e))
+    print(f"Missing dependency: {missing}")
+    print("Activate the project virtual environment or install dependencies with:")
+    print("  python -m pip install -r requirements.txt")
+    sys.exit(1)
 import pandas as pd
 from sklearn.linear_model import LinearRegression
 import warnings
-import sys
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 
@@ -23,7 +30,15 @@ print("-" * 50)
 # ==========================================
 print(f"📥 Fetching {TARGET_TICKER} data from MongoDB...")
 uri = "mongodb+srv://6631501001_db_user:hUxalPBLLxkxLqSB@cluster0.34btd8c.mongodb.net/?appName=Cluster0"
-client = MongoClient(uri)
+try:
+    client = MongoClient(uri, tls=True, serverSelectionTimeoutMS=10000)
+    client.admin.command('ping')
+except Exception as e:
+    print('❌ MongoDB connection failed:', e)
+    print('💡 If this is an Atlas cluster, verify your network/TLS settings and that dnspython is installed.')
+    print('  python -m pip install -r requirements.txt')
+    sys.exit(1)
+
 db = client["BDA_Project"]
 collection = db["StockData"]
 
