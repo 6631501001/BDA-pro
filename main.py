@@ -91,6 +91,17 @@ def get_prediction(
     
     direction = "UP 🟢" if predicted_price > current_price else "DOWN 🔴"
 
+    # ดึงข้อมูลล่าสุดเพื่อส่งไปทำกราฟแท่ง (อย่างน้อย 15 จุด หรือทั้งหมดถ้ามีน้อยกว่า)
+    num_history_points = min(15, len(df))
+    history_data = df.tail(num_history_points).to_dict("records")
+    history_list = [
+        {
+            "time": str(row["Datetime"]), 
+            "price": round(float(row["Close"]), 2)
+        }
+        for row in history_data
+    ]
+
     # ส่งผลลัพธ์กลับไปให้แอปมือถือ
     return {
         "ticker": ticker.upper(),
@@ -102,4 +113,5 @@ def get_prediction(
         "direction": direction,
         "recommendation": "BUY" if predicted_price > current_price else "SELL/HOLD",
         "time_horizon": TIME_HORIZONS[interval],
+        "history": history_list  # เพิ่มข้อมูลกราฟ
     }
