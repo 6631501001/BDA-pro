@@ -43,6 +43,7 @@ class _PredictionScreenState extends State<PredictionScreen> {
   String timeHorizon = "--";
   bool isLoading = false;
   String errorMessage = "";
+  List<dynamic> priceHistory = []; // เพิ่มตัวแปรสำหรับเก็บประวัติราคามาทำกราฟ
 
   // Available options
   final Map<String, String> timeframes = {
@@ -90,6 +91,11 @@ class _PredictionScreenState extends State<PredictionScreen> {
           predictedPrice = data['predicted_price'].toString();
           direction = data['direction']?.toString() ?? "--";
           recommendation = data['recommendation']?.toString() ?? "--";
+          
+          // --- เพิ่มบรรทัดนี้ ---
+          priceHistory = data['history'] ?? []; 
+          // -------------------
+          
           timeHorizon = data['time_horizon']?.toString() ?? horizonMap[selectedTimeframe] ?? "next period";
         });
       } else {
@@ -114,6 +120,69 @@ class _PredictionScreenState extends State<PredictionScreen> {
         isLoading = false;
       });
     }
+  }
+
+  Widget _buildBarChart() {
+    if (priceHistory.isEmpty) return const SizedBox();
+
+    // 1. หาค่าสูงสุดและต่ำสุดเพื่อทำ Scaling ให้กราฟสวย
+    double maxP = priceHistory.map((e) => e['price']).reduce((a, b) => a > b ? a : b).toDouble();
+    double minP = priceHistory.map((e) => e['price']).reduce((a, b) => a < b ? a : b).toDouble();
+    double range = maxP - minP;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          '📈 Price Trend (Last 15 periods)',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 10),
+        Container(
+          height: 150,
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 15),
+          decoration: BoxDecoration(
+            color: Colors.grey.shade100,
+            borderRadius: BorderRadius.circular(15),
+            border: Border.all(color: Colors.grey.shade300),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: priceHistory.map((item) {
+              double price = item['price'].toDouble();
+              // คำนวณความสูง: ถ้า range เป็น 0 ให้สูงกลางๆ ถ้าไม่ให้คำนวณตามสัดส่วนราคา
+              double barHeight = range == 0 ? 60 : ((price - minP) / range * 100) + 15;
+
+              return Column(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Tooltip(
+                    message: "\$$price",
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 500),
+                      width: 12,
+                      height: barHeight,
+                      decoration: BoxDecoration(
+                        color: Colors.deepPurple.shade400,
+                        borderRadius: BorderRadius.circular(3),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.deepPurple.withAlpha(51),
+                            blurRadius: 2,
+                            offset: const Offset(0, 1),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            }).toList(),
+          ),
+        ),
+      ],
+    );
   }
 
   @override
@@ -229,6 +298,11 @@ class _PredictionScreenState extends State<PredictionScreen> {
               ),
               const SizedBox(height: 20),
 
+              // ========== แทรกกราฟตรงนี้ ==========
+              _buildBarChart(), 
+              // =================================
+              
+              const SizedBox(height: 20),
               // ========== RECOMMENDATION ==========
               if (recommendation != "--")
                 Card(
