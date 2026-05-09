@@ -33,7 +33,21 @@ except Exception as e:
 db = client["BDA_Project"]
 collection = db["StockData_M15"]
 
-TICKERS = ["AAPL", "MSFT", "GC=F"]
+TICKERS = [
+    # Commodities (Meta5 favorites)
+    "GC=F",      # Gold
+    "SI=F",      # Silver
+    "CL=F",      # Crude Oil (WTI)
+    "NG=F",      # Natural Gas
+    # Major Forex Pairs
+    "EURUSD=X",  # EUR/USD
+    "GBPUSD=X",  # GBP/USD
+    "USDJPY=X",  # USD/JPY
+    "AUDUSD=X",  # AUD/USD
+    # Stocks
+    "AAPL",
+    "MSFT",
+]
 PERIOD = "60d"
 INTERVAL = "15m"
 
