@@ -34,7 +34,9 @@ class _PredictionScreenState extends State<PredictionScreen> {
   // Timeframe selection
   String selectedTimeframe = "M15";
   String selectedTicker = "GC=F";
-  
+
+  String latestTime = "--";
+
   // Data display
   String currentPrice = "--";
   String predictedPrice = "--";
@@ -43,7 +45,16 @@ class _PredictionScreenState extends State<PredictionScreen> {
   String timeHorizon = "--";
   bool isLoading = false;
   String errorMessage = "";
+  // --- ฟีเจอร์ Pro ที่เพิ่มเข้ามา ---
+  String confidenceScore = "--";
+  String rsiValue = "--";
+  String macdValue = "--";
   List<dynamic> priceHistory = []; // เพิ่มตัวแปรสำหรับเก็บประวัติราคามาทำกราฟ
+
+  // --- ฟีเจอร์ Quant (ข่าว & VIX) ---
+  String newsSentiment = "--";
+  String marketVix = "--";
+  String marketRisk = "--";
 
   // Available options
   final Map<String, String> timeframes = {
@@ -54,9 +65,16 @@ class _PredictionScreenState extends State<PredictionScreen> {
 
   // Full ticker list aligned with the backend ingestion scripts
   final List<String> tickers = [
-    "GC=F", "SI=F", "CL=F", "NG=F",
-    "EURUSD=X", "GBPUSD=X", "USDJPY=X", "AUDUSD=X",
-    "AAPL", "MSFT",
+    "GC=F",
+    "SI=F",
+    "CL=F",
+    "NG=F",
+    "EURUSD=X",
+    "GBPUSD=X",
+    "USDJPY=X",
+    "AUDUSD=X",
+    "AAPL",
+    "MSFT",
   ];
 
   final Map<String, String> horizonMap = {
@@ -66,6 +84,7 @@ class _PredictionScreenState extends State<PredictionScreen> {
   };
 
   // วิ่งไปดึงข้อมูลจาก Railway API (ใช้งานได้ทุกแพลตฟอร์ม Web/iOS/Android)
+  // วิ่งไปดึงข้อมูลจาก API
   Future<void> fetchPrediction() async {
     setState(() {
       isLoading = true;
@@ -73,8 +92,8 @@ class _PredictionScreenState extends State<PredictionScreen> {
     });
 
     try {
-      // 🚀 เปลี่ยนจาก 127.0.0.1 เป็นลิงก์ Railway ของคุณตรงนี้ครับ!
-      final url = Uri.parse('https://bda-pro-production.up.railway.app/predict').replace(
+      // 🚀 ใช้คอมเป็น server (Localhost)
+      final url = Uri.parse('http://127.0.0.1:8000/predict').replace(
         queryParameters: {
           'ticker': selectedTicker,
           'interval': selectedTimeframe,
@@ -86,17 +105,29 @@ class _PredictionScreenState extends State<PredictionScreen> {
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
 
+        // 🌟 วาง setState ไว้ตรงนี้ครับ (หลังจากได้ data มาแล้ว)
         setState(() {
           currentPrice = data['current_price'].toString();
           predictedPrice = data['predicted_price'].toString();
           direction = data['direction']?.toString() ?? "--";
           recommendation = data['recommendation']?.toString() ?? "--";
-          
-          // --- เพิ่มบรรทัดนี้ ---
-          priceHistory = data['history'] ?? []; 
-          // -------------------
-          
-          timeHorizon = data['time_horizon']?.toString() ?? horizonMap[selectedTimeframe] ?? "next period";
+          latestTime = data['latest_time']?.toString() ?? "--";
+
+          // ข้อมูลทำกราฟ
+          priceHistory = data['history'] ?? [];
+          timeHorizon =
+              data['time_horizon']?.toString() ??
+              horizonMap[selectedTimeframe] ??
+              "next period";
+
+          // --- รับค่า Pro Features จาก API ---
+          confidenceScore = data['confidence']?.toString() ?? "--";
+          rsiValue = data['rsi']?.toString() ?? "--";
+          macdValue = data['macd']?.toString() ?? "--";
+          // --- รับค่า Quant Features จาก API ---
+          newsSentiment = data['news_sentiment']?.toString() ?? "--";
+          marketVix = data['market_vix']?.toString() ?? "--";
+          marketRisk = data['market_risk']?.toString() ?? "--";
         });
       } else {
         String message = 'Server Error: ${response.statusCode}';
@@ -113,7 +144,7 @@ class _PredictionScreenState extends State<PredictionScreen> {
       }
     } catch (e) {
       setState(() {
-        errorMessage = "Connection error: ไม่สามารถเชื่อมต่อ Railway ได้ ($e)";
+        errorMessage = "Connection error: ไม่สามารถเชื่อมต่อ API ได้ ($e)";
       });
     } finally {
       setState(() {
@@ -126,8 +157,14 @@ class _PredictionScreenState extends State<PredictionScreen> {
     if (priceHistory.isEmpty) return const SizedBox();
 
     // 1. หาค่าสูงสุดและต่ำสุดเพื่อทำ Scaling ให้กราฟสวย
-    double maxP = priceHistory.map((e) => e['price']).reduce((a, b) => a > b ? a : b).toDouble();
-    double minP = priceHistory.map((e) => e['price']).reduce((a, b) => a < b ? a : b).toDouble();
+    double maxP = priceHistory
+        .map((e) => e['price'])
+        .reduce((a, b) => a > b ? a : b)
+        .toDouble();
+    double minP = priceHistory
+        .map((e) => e['price'])
+        .reduce((a, b) => a < b ? a : b)
+        .toDouble();
     double range = maxP - minP;
 
     return Column(
@@ -152,7 +189,9 @@ class _PredictionScreenState extends State<PredictionScreen> {
             children: priceHistory.map((item) {
               double price = item['price'].toDouble();
               // คำนวณความสูง: ถ้า range เป็น 0 ให้สูงกลางๆ ถ้าไม่ให้คำนวณตามสัดส่วนราคา
-              double barHeight = range == 0 ? 60 : ((price - minP) / range * 100) + 15;
+              double barHeight = range == 0
+                  ? 60
+                  : ((price - minP) / range * 100) + 15;
 
               return Column(
                 mainAxisAlignment: MainAxisAlignment.end,
@@ -258,7 +297,17 @@ class _PredictionScreenState extends State<PredictionScreen> {
                       const SizedBox(height: 8),
                       Text(
                         currentPrice == "--" ? currentPrice : '\$$currentPrice',
-                        style: const TextStyle(fontSize: 36, fontWeight: FontWeight.bold),
+                        style: const TextStyle(
+                          fontSize: 36,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text(
+                        'อัปเดตล่าสุด: $latestTime',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey,
+                        ),
                       ),
                     ],
                   ),
@@ -285,7 +334,9 @@ class _PredictionScreenState extends State<PredictionScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        predictedPrice == "--" ? predictedPrice : '\$$predictedPrice',
+                        predictedPrice == "--"
+                            ? predictedPrice
+                            : '\$$predictedPrice',
                         style: const TextStyle(
                           fontSize: 36,
                           fontWeight: FontWeight.bold,
@@ -299,9 +350,9 @@ class _PredictionScreenState extends State<PredictionScreen> {
               const SizedBox(height: 20),
 
               // ========== แทรกกราฟตรงนี้ ==========
-              _buildBarChart(), 
+              _buildBarChart(),
+
               // =================================
-              
               const SizedBox(height: 20),
               // ========== RECOMMENDATION ==========
               if (recommendation != "--")
@@ -340,6 +391,166 @@ class _PredictionScreenState extends State<PredictionScreen> {
               const SizedBox(height: 30),
 
               // ========== FETCH BUTTON ==========
+              // ========== TECHNICAL INDICATORS & CONFIDENCE ==========
+              if (confidenceScore != "--")
+                Row(
+                  children: [
+                    Expanded(
+                      child: Card(
+                        elevation: 2,
+                        color: Colors.blue.shade50,
+                        child: Padding(
+                          padding: const EdgeInsets.all(15.0),
+                          child: Column(
+                            children: [
+                              const Text(
+                                'AI Confidence',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.blueGrey,
+                                ),
+                              ),
+                              const SizedBox(height: 5),
+                              Text(
+                                '$confidenceScore%',
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.blue,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: Card(
+                        elevation: 2,
+                        child: Padding(
+                          padding: const EdgeInsets.all(15.0),
+                          child: Column(
+                            children: [
+                              const Text(
+                                'RSI (14)',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.blueGrey,
+                                ),
+                              ),
+                              const SizedBox(height: 5),
+                              Text(
+                                rsiValue,
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: Card(
+                        elevation: 2,
+                        child: Padding(
+                          padding: const EdgeInsets.all(15.0),
+                          child: Column(
+                            children: [
+                              const Text(
+                                'MACD',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.blueGrey,
+                                ),
+                              ),
+                              const SizedBox(height: 5),
+                              Text(
+                                macdValue,
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              const SizedBox(height: 20),
+
+              // ========== QUANT INDICATORS (NEWS & VIX) ==========
+              if (newsSentiment != "--")
+                Row(
+                  children: [
+                    Expanded(
+                      child: Card(
+                        elevation: 2,
+                        color: Colors.orange.shade50,
+                        child: Padding(
+                          padding: const EdgeInsets.all(15.0),
+                          child: Column(
+                            children: [
+                              const Text(
+                                'News Sentiment',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.blueGrey,
+                                ),
+                              ),
+                              const SizedBox(height: 5),
+                              Text(
+                                newsSentiment,
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: Card(
+                        elevation: 2,
+                        color: marketRisk.contains("HIGH")
+                            ? Colors.red.shade50
+                            : Colors.green.shade50,
+                        child: Padding(
+                          padding: const EdgeInsets.all(15.0),
+                          child: Column(
+                            children: [
+                              const Text(
+                                'Market VIX (Risk)',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.blueGrey,
+                                ),
+                              ),
+                              const SizedBox(height: 5),
+                              Text(
+                                '$marketVix\n($marketRisk)',
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              const SizedBox(height: 20),
+
+              // ========== เอาปุ่มมาวางตรงนี้ครับ! ==========
               SizedBox(
                 width: double.infinity,
                 height: 50,
@@ -353,10 +564,14 @@ class _PredictionScreenState extends State<PredictionScreen> {
                       ? const CircularProgressIndicator(color: Colors.white)
                       : const Text(
                           'Get Prediction',
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                 ),
               ),
+              const SizedBox(height: 20), // เว้นระยะห่างด้านล่างสุด
             ],
           ),
         ),
